@@ -17,12 +17,12 @@ Contents:
 
 * actr-stap.lisp -- actr-stap library.
 
-** should be loaded after ACT-R loads (tested with ACT-R v7)
+ * should be loaded after ACT-R loads (tested with ACT-R v7)
 
-** requires Quicklisp (https://www.quicklisp.org) to load additional LISP libraries (usocket, stjson, bordeaux-threads)
+ * requires Quicklisp (https://www.quicklisp.org) to load additional LISP libraries (usocket, stjson, bordeaux-threads)
 
 * button-clicker.lisp -- sample dumb model that looks for buttons on screen and clicks them
 
-** try the following to get started: start the STAP task on localhost:9000, load ACT-R, load your model, then run:
+ * try the following to get started: start the STAP task on localhost:9000, load ACT-R, load your model, then run:
 
          (run-tcp-task :host "localhost" :port 9000)

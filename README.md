@@ -21,4 +21,5 @@ Contents:
 
 * button-clicker.lisp -- sample dumb model that looks for buttons on screen and clicks them
 ** try the following to get started: start the STAP task on localhost:9000, load ACT-R, load your model, then run:
+
          (run-tcp-task :host "localhost" :port 9000)

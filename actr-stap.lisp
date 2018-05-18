@@ -1,4 +1,4 @@
-;; act-r device for tcp-tasks running STAP7 api
+;; act-r device for tcp-tasks running STAP7.1 API
 ;;  this code de-serializes STAP display updates to create standard text/button elements in ACT-R visicon, and serializes ACT-R button clicks into STAP button-click actions
 ;;
 ;; to run your model:
@@ -20,7 +20,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; define constants
-(defconstant +stap-implemented-options+ '("S" "W" "onedit"))
+(defconstant +stap-implemented-options+ '("T" "U" "onedit"))
 (defconstant +stap-load-event+ '(0))
 (defconstant +pixel-offset+ 10)
 (defconstant +refresh-rate+ .05)
@@ -126,6 +126,36 @@
 (defun stop-condition ()
 	(and (not (bt:thread-alive-p *socket-read-thread*)) (not *stap-event-times*) (not *updating*) (not *stap-events-unscheduled*)))
 
+;; update display based on stap string
+(defun stap-update (json-string)
+	(display-update 'in-progress)
+	(let ((data (st-json:read-json-from-string json-string)))
+		(etypecase data
+			(st-json:jso
+				(dolist (option (slot-value data 'st-json::alist))
+					(cond
+						((equal (car option) "require")
+							(dolist (required (slot-value (cdr option) 'st-json::alist))
+								(cond
+									((equal (car required) "options")
+										(dolist (option (cdr required))
+											(when (not (find option +stap-implemented-options+ :test 'equal))
+												(print-warning "This task requires unimplemented option: ~s" option)
+												(socket-close *socket*))))
+									(t
+										(print-warning "This task requires something, and i don't know how to handle it:~%    { ~s : ~s }"
+											(car required) (cdr required))
+										(socket-close *socket*)))))
+						(t
+							(print-warning "Ignoring directive { ~s : ~s }" (car option) (cdr option))))))
+			(list
+				(update-element *hierarchical-display* nil data 1))
+			((or keyword number string)
+				(when (eq data :null)
+					(setq *hierarchical-display* (list nil))
+					(clear-exp-window)))))
+	(display-update))
+
 ;; events
 (defun past-time (time) (<= time (get-time)))
 (defun remove-stap-events ()
@@ -148,19 +178,13 @@
 (defun button-click (btn)
 	(let ((oninput (get-option btn "onedit")))
 		(if oninput
-			(let ((valopt (st-json:jso))
-					(btnpos (get-position btn (gethash btn *child-parent*))))
+			(let (  (valopt (st-json:jso))
+					(btnpos (get-position btn (gethash btn *child-parent*))) )
+				(push (cons "id" btnpos) (slot-value valopt 'st-json::alist))
 				(if (jsop oninput)
 					(dolist (option (slot-value oninput 'st-json::alist))
-						(if (equal (car option) "@")
-							(push (cons btnpos (cdr option)) (slot-value valopt 'st-json::alist))
-							(push option (slot-value valopt 'st-json::alist))))
-					(push (cons btnpos oninput) (slot-value valopt 'st-json::alist)))
-					; (let ((keyvalpair (assoc "@" (slot-value oninput 'st-json::alist) :test 'equal)))
-						; (if keyvalpair
-							; (setf (car keyvalpair) (get-position btn (gethash btn *child-parent*)))
-							; (push (cons (get-position btn (gethash btn *child-parent*)) (st-json:jso))
-								; (slot-value oninput 'st-json::alist))))
+						(push option (slot-value valopt 'st-json::alist)))
+					(push (cons "v" oninput) (slot-value valopt 'st-json::alist)))
 				(display-update 'in-progress)
 				(process-element (gethash btn *child-parent*) valopt (gethash btn *level*))
 				(display-update))))
@@ -198,35 +222,6 @@
 			(proc-display)
 			(if *print-visicon* (print-visicon))
 			(pause-for-something-to-do))))
-(defun stap-update (json-string)
-	(display-update 'in-progress)
-	(let ((data (st-json:read-json-from-string json-string)))
-		(etypecase data
-			(st-json:jso
-				(dolist (option (slot-value data 'st-json::alist))
-					(cond
-						((equal (car option) "require")
-							(dolist (required (slot-value (cdr option) 'st-json::alist))
-								(cond
-									((equal (car required) "options")
-										(dolist (option (cdr required))
-											(when (not (find option +stap-implemented-options+ :test 'equal))
-												(print-warning "This task requires unimplemented option: ~s" option)
-												(socket-close *socket*))))
-									(t
-										(print-warning "This task requires something, and i don't know how to handle it:~%    { ~s : ~s }"
-											(car required) (cdr required))
-										(socket-close *socket*)))))
-						(t
-							(print-warning "Ignoring directive { ~s : ~s }" (car option) (cdr option))))))
-			(list
-				(update-element *hierarchical-display* nil data 1))
-			((or keyword number string)
-				(when (eq data :null)
-					(setq *hierarchical-display* (list nil))
-					(clear-exp-window)))))
-	(display-update))
-
 (defun correct-positions ()
 	(loop for element in (flatten *hierarchical-display*)
 		and position from 0 do
@@ -307,30 +302,15 @@
 			(e-val :undefined)
 			(e-opt nil) )
 		(if (jsop e)
-			(progn
-				(setq e-opt (slot-value e 'st-json::alist))
-				(dolist (option e-opt)
-					(cond
-						((numberp (car option))
-							(setq e-key (car option)
-								e-val (cdr option)))
-						((equal (car option) "*")
-							(setq e-key "*"
-								e-val (cdr option)))
-						((equal (subseq (car option) 0 1) "@")
-							(let ( (keytxt (subseq (car option) 1)) )
-								(if keytxt (setq e-key keytxt)))
-							(setq e-val (cdr option)))
-						((equal (subseq (car option) 0 1) "#")
-							(setq e-key (parse-integer (subseq (car option) 1))
-								e-val (cdr option)))))
-				(if (jsop e-val)
-					(setq e-val :undefined)))
+			(setq
+				e-opt (slot-value e 'st-json::alist)
+				e-key (cdr (assoc "id" e-opt :test 'equal))
+				e-val (cdr (assoc "v" e-opt :test 'equal)))
 			(setq e-val e))
-		;(model-output "?: ~a : ~a ~a" e-key e-val e-opt)
-		(let ( (delay (or (assoc "S" e-opt :test 'equal) (assoc "W" e-opt :test 'equal))) )
+		(model-output "?: ~a : ~a ~a" e-key e-val e-opt)
+		(let ( (delay (or (assoc "U" e-opt :test 'equal) (assoc "T" e-opt :test 'equal))) )
 			(if delay
-				(stap-event (if (equal (car delay) "S") (cdr delay) (+ (get-time) (* (cdr delay) 1000)))
+				(stap-event (if (equal (car delay) "U") (cdr delay) (+ (get-time) (* (cdr delay) 1000)))
 						#'(lambda ()
 							(display-update 'in-progress)
 							(set-key-val-opt container e-key e-val e-opt e-lvl)
@@ -338,41 +318,36 @@
 				(set-key-val-opt container e-key e-val e-opt e-lvl)))))
 
 (defun set-key-val-opt (container e-key e-val e-opt e-lvl)
-	(if (equal e-key "*")
-		;; if key is a wildcard ("*"), change val/opt for all existing elements
-		(dolist (e (cdr container))
-			(set-key-val-opt container (car e) e-val e-opt e-lvl))
-		;; otherwise, set val/opt for the given key
-		(let ( (e-container (if (numberp e-key)
-								(nth e-key (cdr container))
-								(assoc e-key (cdr container) :test 'eql-text))) )
-			;(model-output "!: ~a : ~a ~a" e-key e-val e-opt)
-			(if (eq e-val :null)
-				(when e-container
-					; when :null, remove entire element
-					(apply #'remove-items-from-exp-window (remove-if 'symbolp (flatten e-container)))
-					(remhash (car e-container) *options*)
-					(remhash (car e-container) *child-parent*)
-					(remhash (car e-container) *level*)
-					(setf (cdr container) (remove e-container (cdr container))))
-				(progn
-					(if e-container
-						;; replace with new value
-						(if (neq e-val :undefined)
-							(update-element e-container e-key e-val e-lvl))
-						;; add new element
-						(progn
-							(push-last
-								(setq e-container
-									(add-element
-										(if (numberp e-key) nil e-key)
-										(if (eq e-val :undefined) nil e-val)
-										e-lvl))
-								(cdr container))
-							(setf (gethash (car e-container) *child-parent*) container)
-							(setf (gethash (car e-container) *level*) e-lvl)
-							))
-					(update-options (car e-container) e-opt))))))
+	(let ( (e-container (if (numberp e-key)
+							(nth e-key (cdr container))
+							(assoc e-key (cdr container) :test 'eql-text))) )
+		;(model-output "!: ~a : ~a ~a" e-key e-val e-opt)
+		(if (eq e-val :null)
+			(when e-container
+				; when :null, remove entire element
+				(apply #'remove-items-from-exp-window (remove-if 'symbolp (flatten e-container)))
+				(remhash (car e-container) *options*)
+				(remhash (car e-container) *child-parent*)
+				(remhash (car e-container) *level*)
+				(setf (cdr container) (remove e-container (cdr container))))
+			(progn
+				(if e-container
+					;; replace with new value
+					(if (neq e-val :undefined)
+						(update-element e-container e-key e-val e-lvl))
+					;; add new element
+					(progn
+						(push-last
+							(setq e-container
+								(add-element
+									(if (numberp e-key) nil e-key)
+									(if (eq e-val :undefined) nil e-val)
+									e-lvl))
+							(cdr container))
+						(setf (gethash (car e-container) *child-parent*) container)
+						(setf (gethash (car e-container) *level*) e-lvl)
+						))
+				(update-options (car e-container) e-opt)))))
 
 (defun get-position (item container)
 	(position item (cdr container) :test 'eql-car-text))

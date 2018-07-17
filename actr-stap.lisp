@@ -199,9 +199,10 @@
 				(not *stap-events-unscheduled*)
 				(bt:thread-alive-p *socket-read-thread*)) do
 					(when (not paused)
-						(model-output "*PAUSED...")
+						; (model-output "*PAUSED...")
 						(setq paused t)))
-			(if paused (model-output "...CONTINUING*")))))
+			;(if paused (model-output "...CONTINUING*"))
+			)))
 
 ;; visicon updates
 (defun display-update (&optional (val 'done))
@@ -307,7 +308,7 @@
 				e-key (cdr (assoc "id" e-opt :test 'equal))
 				e-val (cdr (assoc "v" e-opt :test 'equal)))
 			(setq e-val e))
-		(model-output "?: ~a : ~a ~a" e-key e-val e-opt)
+		; (model-output "processing {id:~a, v:~a, ~a}" e-key e-val e-opt)
 		(let ( (delay (or (assoc "U" e-opt :test 'equal) (assoc "T" e-opt :test 'equal))) )
 			(if delay
 				(stap-event (if (equal (car delay) "U") (cdr delay) (+ (get-time) (* (cdr delay) 1000)))
@@ -318,36 +319,35 @@
 				(set-key-val-opt container e-key e-val e-opt e-lvl)))))
 
 (defun set-key-val-opt (container e-key e-val e-opt e-lvl)
-	(let ( (e-container (if (numberp e-key)
-							(nth e-key (cdr container))
-							(assoc e-key (cdr container) :test 'eql-text))) )
-		;(model-output "!: ~a : ~a ~a" e-key e-val e-opt)
+	(let ( (item (if (numberp e-key)
+					(nth e-key (cdr container))
+					(assoc e-key (cdr container) :test 'eql-text))) )
 		(if (eq e-val :null)
-			(when e-container
-				; when :null, remove entire element
-				(apply #'remove-items-from-exp-window (remove-if 'symbolp (flatten e-container)))
-				(remhash (car e-container) *options*)
-				(remhash (car e-container) *child-parent*)
-				(remhash (car e-container) *level*)
-				(setf (cdr container) (remove e-container (cdr container))))
+			;; delete element
+			(when item
+				(apply #'remove-items-from-exp-window (remove-if 'symbolp (flatten item)))
+				(remhash (car item) *options*)
+				(remhash (car item) *child-parent*)
+				(remhash (car item) *level*)
+				(setf (cdr container) (remove item (cdr container))))
 			(progn
-				(if e-container
-					;; replace with new value
+				(if item
+					;; update element
 					(if (neq e-val :undefined)
-						(update-element e-container e-key e-val e-lvl))
+						(update-element item e-key e-val e-lvl))
 					;; add new element
 					(progn
 						(push-last
-							(setq e-container
+							(setq item
 								(add-element
 									(if (numberp e-key) nil e-key)
 									(if (eq e-val :undefined) nil e-val)
 									e-lvl))
 							(cdr container))
-						(setf (gethash (car e-container) *child-parent*) container)
-						(setf (gethash (car e-container) *level*) e-lvl)
+						(setf (gethash (car item) *child-parent*) container)
+						(setf (gethash (car item) *level*) e-lvl)
 						))
-				(update-options (car e-container) e-opt)))))
+				(update-options (car item) e-opt)))))
 
 (defun get-position (item container)
 	(position item (cdr container) :test 'eql-car-text))

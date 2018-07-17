@@ -6,12 +6,12 @@ Most importantly, the task software employed for ACT-R simulations would be the 
 
 ACTR-STAP enables millisecond-precision model-controlled timing, even for faster-than-real-time simulations, and STAP message log files may be played back and analyzed on equal footing with those of humans and other computational participants. 
 
-<img src="https://raw.githubusercontent.com/vdv7/stap/master/pres/stap-icon.png" width=250 align=right>
+<img src="https://raw.githubusercontent.com/stap7/stap/master/pres/stap-icon.png" width=250 align=right>
 STAP (Simple Task-Actor Protocol) is a machine-readable format for specifying user-interface changes. 
 STAP promotes model re-use across tasks and task re-use across models (including non ACT-R models).
-STAP tasks may be developed in any language, and are rendered for human consumption via the a web template (e.g. stapjs; https://github.com/vdv7/stapjs).
+STAP tasks may be developed in any language, and are rendered for human consumption via the a web template (e.g. stapjs; https://github.com/stap7/stapjs).
 
-More details on STAP may be found at https://github.com/vdv7/stap
+More details on STAP may be found at https://github.com/stap7/stap
 
 Contents:
 
